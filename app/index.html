@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DataNusa — Statistik Indonesia</title>
+<meta name="description" content="Statistik Indonesia 2015–2025: penduduk, ekonomi, dan kesejahteraan — angka resmi BPS, Bank Dunia, dan APJII, terbuka untuk semua.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b2a4a'/%3E%3Cpath d='M6 22 L12 15 L18 18 L26 9' fill='none' stroke='%23e8a838' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='26' cy='9' r='2.5' fill='%23e8a838'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<header class="site-header">
+  <div class="header-inner">
+    <a class="brand" href="#/" aria-label="DataNusa — beranda">
+      <svg class="brand-logo" viewBox="0 0 40 40" width="36" height="36" aria-hidden="true">
+        <rect width="40" height="40" rx="9" fill="#0b2a4a"/>
+        <path d="M7 28 L15 19 L22 23 L33 11" fill="none" stroke="#e8a838" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="33" cy="11" r="3" fill="#e8a838"/>
+      </svg>
+      <span class="brand-text"><strong>DataNusa</strong><small>Statistik Indonesia</small></span>
+    </a>
+    <button id="nav-toggle" class="nav-toggle" type="button" aria-label="Buka menu" aria-expanded="false">☰</button>
+    <nav id="main-nav" class="main-nav" aria-label="Navigasi utama">
+      <a class="nav-link" href="#/">Beranda</a>
+      <a class="nav-link" href="#/ekonomi">Ekonomi</a>
+      <a class="nav-link" href="#/penduduk">Penduduk</a>
+      <a class="nav-link" href="#/sosial">Sosial</a>
+      <a class="nav-link" href="#/provinsi">Provinsi</a>
+      <a class="nav-link" href="#/data">Tabel Data</a>
+      <a class="nav-link" href="#/tentang">Tentang</a>
+    </nav>
+    <div class="search-wrap">
+      <input id="global-search" type="search" placeholder="Cari statistik… (mis. inflasi)" aria-label="Pencarian global" autocomplete="off">
+      <div id="search-results" class="search-results" hidden></div>
+    </div>
+  </div>
+</header>
+<main id="app" class="container" aria-live="polite"></main>
+<footer class="site-footer">
+  <div class="container footer-inner">
+    <p><strong>DataNusa — Statistik Indonesia.</strong> Situs independen, bukan situs resmi BPS. Angka bersumber dari BPS, Bank Dunia (WDI 2024), dan APJII 2024; setiap halaman mencantumkan sumber dan tahunnya.</p>
+    <p class="footer-links"><a href="#/tentang">Tentang &amp; metodologi</a> · <a href="#/data">Unduh data (CSV)</a></p>
+  </div>
+</footer>
+<script type="module" src="./main.js"></script>
+</body>
+</html>

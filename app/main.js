@@ -1,185 +1,145 @@
-// DataNusa — router hash, state UI, dan semua event listener.
-// Satu-satunya titik masuk halaman: index.html memuat modul ini.
-
-import { YEARS, SERIES, SEARCH_INDEX } from './data.js';
-import { homeView, economyView, populationView, socialView, provincesView, dataView, aboutView } from './views.js';
-
-export const ui = {
-  homeMetric: 'gdpGrowth',
-  homeRange: 'all',
-  econTab: 'gdp',
-  econRange: 'all',
-  socialTab: 'poverty',
-  popYear: 2024,
-  provSearch: '',
-  provIsland: 'Semua',
-  provSort: 'pop',
-  provSortDir: 'desc',
-  selectedProv: null,
-  dataIndicators: ['population', 'gdpGrowth', 'inflation'],
-  dataYear: 2025,
-  csvStatus: '',
-};
+// DataNusa — router hash + state + semua event listener + unduh CSV + pencarian global.
+import { YEARS, SERIES, INDICATORS } from './data.js';
+import { viewHome, viewEconomy, viewPopulation, viewSocial, viewProvinces, viewData, viewAbout } from './views.js';
 
 const app = document.getElementById('app');
-const DEC = { population: 1, gdpGrowth: 2, gdpNominal: 0, gdpPerCapita: 1, inflation: 2, poverty: 2, unemployment: 2, exports: 1, imports: 1, gini: 3, hdi: 2 };
+const ui = {
+  homeMetric: 'growth', homeRange: 'all',
+  ecoTab: 'gdp', socialTab: 'poverty', popYear: 2024,
+  provQ: '', provIsland: 'Semua', provSort: { key: 'pop', dir: -1 }, provDetail: null,
+  dataSel: ['population', 'gdpGrowth', 'poverty'], dataYear: 2025,
+};
 
-function fmtCsv(n, digits) {
-  if (n === null || n === undefined) return '';
-  return Number(n).toFixed(digits).replace('.', ',');
-}
+const SEARCH_INDEX = [
+  { label: 'Pertumbuhan PDB', href: '#/ekonomi?tab=gdp', keys: 'pdb pertumbuhan ekonomi gdp' },
+  { label: 'Inflasi', href: '#/ekonomi?tab=inflation', keys: 'inflasi harga desember' },
+  { label: 'Ekspor & impor', href: '#/ekonomi?tab=trade', keys: 'ekspor impor neraca perdagangan surplus' },
+  { label: 'PDB per kapita', href: '#/ekonomi?tab=percapita', keys: 'pdb per kapita pendapatan' },
+  { label: 'Penduduk', href: '#/penduduk', keys: 'penduduk jumlah jiwa sensus' },
+  { label: 'Kemiskinan', href: '#/sosial?tab=poverty', keys: 'kemiskinan miskin garis' },
+  { label: 'Pengangguran', href: '#/sosial?tab=unemployment', keys: 'pengangguran tpt sakernas kerja' },
+  { label: 'IPM — Indeks Pembangunan Manusia', href: '#/sosial?tab=hdi', keys: 'ipm pembangunan manusia hdi' },
+  { label: 'Rasio Gini', href: '#/sosial?tab=gini', keys: 'gini ketimpangan' },
+  { label: 'Provinsi', href: '#/provinsi', keys: 'provinsi jawa sumatera daerah' },
+  { label: 'Tabel Data & unduh CSV', href: '#/data', keys: 'tabel data csv unduh indikator' },
+  { label: 'Perbandingan ASEAN', href: '#/ekonomi', keys: 'asean singapura malaysia vietnam' },
+  { label: 'Tentang & sumber data', href: '#/tentang', keys: 'tentang sumber metodologi bps' },
+];
 
-function parseHash() {
-  const raw = location.hash.replace(/^#/, '') || '/';
+function route() {
+  const raw = location.hash.replace(/^#\/?/, '');
   const [pathPart, queryPart] = raw.split('?');
   const params = new URLSearchParams(queryPart || '');
-  return { path: pathPart || '/', params };
-}
-
-function render() {
-  const { path, params } = parseHash();
+  const path = pathPart || '';
   if (params.get('tab')) {
-    if (path === '/ekonomi') ui.econTab = params.get('tab');
-    if (path === '/sosial') ui.socialTab = params.get('tab');
+    if (path === 'ekonomi') ui.ecoTab = params.get('tab');
+    if (path === 'sosial') ui.socialTab = params.get('tab');
   }
   let html = '';
-  if (path === '/' || path === '') html = homeView(ui);
-  else if (path === '/ekonomi') html = economyView(ui);
-  else if (path === '/penduduk') html = populationView(ui);
-  else if (path === '/sosial') html = socialView(ui);
-  else if (path === '/provinsi') html = provincesView(ui);
-  else if (path === '/data') html = dataView(ui);
-  else if (path === '/tentang') html = aboutView();
-  else html = homeView(ui);
+  let nav = 'home';
+  if (path === 'ekonomi') { html = viewEconomy(ui); nav = 'ekonomi'; }
+  else if (path === 'penduduk') { html = viewPopulation(ui); nav = 'penduduk'; }
+  else if (path === 'sosial') { html = viewSocial(ui); nav = 'sosial'; }
+  else if (path === 'provinsi') { html = viewProvinces(ui); nav = 'provinsi'; }
+  else if (path === 'data') { html = viewData(ui); nav = 'data'; }
+  else if (path === 'tentang') { html = viewAbout(); nav = 'tentang'; }
+  else { html = viewHome(ui); nav = 'home'; }
   app.innerHTML = html;
-  document.querySelectorAll('.nav-link').forEach((a) => {
-    const href = a.getAttribute('href') || '';
-    a.classList.toggle('active', href === '#' + (path === '/' ? '/' : path) || (path === '/' && href === '#/'));
-  });
+  document.querySelectorAll('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === nav));
+  document.getElementById('main-nav').classList.remove('open');
+  window.scrollTo(0, 0);
   window.__shotReady = true;
-  // Kembalikan fokus pencarian provinsi bila sedang mengetik.
-  const ps = document.getElementById('prov-search');
-  if (ps && document.activeElement !== ps && ui.provSearch) { ps.focus(); ps.setSelectionRange(ps.value.length, ps.value.length); }
 }
 
-function downloadCsv() {
-  const chosen = ui.dataIndicators.length ? ui.dataIndicators : ['population'];
-  const header = ['Tahun', ...chosen.map((k) => SERIES[k].label)].join(';');
-  const lines = [header];
+function bindGlobal() {
+  document.getElementById('menu-btn').addEventListener('click', () => {
+    document.getElementById('main-nav').classList.toggle('open');
+  });
+  const input = document.getElementById('global-search');
+  const box = document.getElementById('search-results');
+  input.addEventListener('input', () => {
+    const q = input.value.trim().toLowerCase();
+    if (!q) { box.hidden = true; box.innerHTML = ''; return; }
+    const hits = SEARCH_INDEX.filter((e) => (e.label + ' ' + e.keys).toLowerCase().includes(q)).slice(0, 6);
+    if (!hits.length) { box.hidden = true; box.innerHTML = ''; return; }
+    box.innerHTML = hits.map((h) => `<a href="${h.href}">${h.label}</a>`).join('');
+    box.hidden = false;
+  });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const first = box.querySelector('a');
+      if (first) { location.hash = first.getAttribute('href'); box.hidden = true; }
+    }
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.search-box')) { box.hidden = true; }
+  });
+}
+
+function bindPage() {
+  app.addEventListener('click', (e) => {
+    const hm = e.target.closest('[data-home-metric]');
+    if (hm) { ui.homeMetric = hm.dataset.homeMetric; route(); return; }
+    const eco = e.target.closest('[data-eco-tab]');
+    if (eco) { ui.ecoTab = eco.dataset.ecoTab; history.replaceState(null, '', `#/ekonomi?tab=${ui.ecoTab}`); route(); return; }
+    const soc = e.target.closest('[data-social-tab]');
+    if (soc) { ui.socialTab = soc.dataset.socialTab; history.replaceState(null, '', `#/sosial?tab=${ui.socialTab}`); route(); return; }
+    const chip = e.target.closest('[data-prov-island]');
+    if (chip) { ui.provIsland = chip.dataset.provIsland; ui.provDetail = null; route(); return; }
+    const sort = e.target.closest('[data-prov-sort]');
+    if (sort) {
+      const k = sort.dataset.provSort;
+      ui.provSort = ui.provSort.key === k ? { key: k, dir: -ui.provSort.dir } : { key: k, dir: k === 'name' || k === 'island' ? 1 : -1 };
+      route(); return;
+    }
+    const row = e.target.closest('tbody tr[data-prov]');
+    if (row) { ui.provDetail = row.dataset.prov; route(); return; }
+    if (e.target.id === 'data-csv') { downloadCSV(); }
+  });
+  app.addEventListener('change', (e) => {
+    if (e.target.id === 'home-range') { ui.homeRange = e.target.value; route(); }
+    if (e.target.id === 'pop-year') { ui.popYear = Number(e.target.value); route(); }
+    if (e.target.id === 'data-year') { ui.dataYear = Number(e.target.value); route(); }
+    if (e.target.matches('[data-ind]')) {
+      const k = e.target.dataset.ind;
+      ui.dataSel = e.target.checked ? [...ui.dataSel, k] : ui.dataSel.filter((x) => x !== k);
+      if (!ui.dataSel.length) { ui.dataSel = [k]; e.target.checked = true; }
+      route();
+    }
+  });
+  app.addEventListener('input', (e) => {
+    if (e.target.id === 'prov-search') { ui.provQ = e.target.value; ui.provDetail = null; route(); restoreProvFocus(); }
+  });
+}
+
+function restoreProvFocus() {
+  const inp = document.getElementById('prov-search');
+  if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+}
+
+function downloadCSV() {
+  const head = ['Tahun', ...ui.dataSel.map((k) => SERIES[k].label + ' (' + SERIES[k].unit + ')')];
+  const lines = [head.join(',')];
   for (const y of YEARS) {
-    if (y > ui.dataYear) break;
-    const i = YEARS.indexOf(y);
-    lines.push([y, ...chosen.map((k) => fmtCsv(SERIES[k].values[i], DEC[k]))].join(';'));
+    const cells = ui.dataSel.map((k) => {
+      const v = SERIES[k].values[YEARS.indexOf(y)];
+      return v === null || v === undefined ? '' : String(v).replace('.', ',');
+    });
+    lines.push([y, ...cells].join(','));
   }
-  const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const blob = new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `datanusa-${ui.dataYear}.csv`;
+  a.download = 'datanusa-data.csv';
   document.body.appendChild(a);
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  ui.csvStatus = `CSV diunduh: datanusa-${ui.dataYear}.csv (${chosen.length} indikator, ${YEARS.filter((y) => y <= ui.dataYear).length} baris).`;
   const st = document.getElementById('csv-status');
-  if (st) st.textContent = ui.csvStatus;
+  if (st) st.textContent = `CSV diunduh: ${ui.dataSel.length} indikator, ${YEARS.length} tahun (2015–2025).`;
 }
 
-// ---- Pencarian global di header ----
-const searchInput = document.getElementById('global-search');
-const searchResults = document.getElementById('search-results');
-
-function runSearch(q) {
-  const query = q.trim().toLowerCase();
-  if (!query) { searchResults.hidden = true; searchResults.innerHTML = ''; return []; }
-  const hits = SEARCH_INDEX.filter((e) => e.term.toLowerCase().includes(query) || e.desc.toLowerCase().includes(query));
-  if (!hits.length) {
-    searchResults.innerHTML = '<div class="search-empty">Tidak ada hasil untuk "' + q.replace(/</g, '&lt;') + '".</div>';
-  } else {
-    searchResults.innerHTML = hits.map((h, i) =>
-      `<a href="${h.route}" class="search-hit" data-hit="${i}"><strong>${h.term}</strong><span>${h.desc}</span></a>`).join('');
-  }
-  searchResults.hidden = false;
-  return hits;
-}
-
-let lastHits = [];
-if (searchInput) {
-  searchInput.addEventListener('input', () => { lastHits = runSearch(searchInput.value); });
-  searchInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const hits = lastHits.length ? lastHits : runSearch(searchInput.value);
-      if (hits.length) {
-        searchResults.hidden = true;
-        location.hash = hits[0].route.replace(/^#/, '');
-      }
-    } else if (e.key === 'Escape') {
-      searchResults.hidden = true;
-      searchInput.blur();
-    }
-  });
-  searchInput.addEventListener('blur', () => setTimeout(() => { searchResults.hidden = true; }, 200));
-}
-document.addEventListener('click', (e) => {
-  if (searchResults && !searchResults.hidden && !e.target.closest('.search-wrap')) searchResults.hidden = true;
-});
-
-// ---- Menu hamburger HP ----
-const burger = document.getElementById('nav-toggle');
-if (burger) {
-  burger.addEventListener('click', () => {
-    const nav = document.getElementById('main-nav');
-    const open = nav.classList.toggle('open');
-    burger.setAttribute('aria-expanded', String(open));
-  });
-}
-
-// ---- Delegasi klik & perubahan di #app ----
-app.addEventListener('click', (e) => {
-  const metricBtn = e.target.closest('[data-home-metric]');
-  if (metricBtn) { ui.homeMetric = metricBtn.getAttribute('data-home-metric'); render(); return; }
-  const econBtn = e.target.closest('[data-econ-tab]');
-  if (econBtn) { ui.econTab = econBtn.getAttribute('data-econ-tab'); render(); return; }
-  const socialBtn = e.target.closest('[data-social-tab]');
-  if (socialBtn) { ui.socialTab = socialBtn.getAttribute('data-social-tab'); render(); return; }
-  const chip = e.target.closest('[data-prov-island]');
-  if (chip) { ui.provIsland = chip.getAttribute('data-prov-island'); render(); return; }
-  const sortBtn = e.target.closest('[data-prov-sort]');
-  if (sortBtn) {
-    const key = sortBtn.getAttribute('data-prov-sort');
-    if (ui.provSort === key) ui.provSortDir = ui.provSortDir === 'asc' ? 'desc' : 'asc';
-    else { ui.provSort = key; ui.provSortDir = 'asc'; }
-    render();
-    return;
-  }
-  const row = e.target.closest('tr[data-prov]');
-  if (row) { ui.selectedProv = row.getAttribute('data-prov'); render(); return; }
-  if (e.target.closest('#data-csv')) { downloadCsv(); return; }
-});
-
-app.addEventListener('input', (e) => {
-  if (e.target.id === 'prov-search') { ui.provSearch = e.target.value; render(); }
-});
-
-app.addEventListener('change', (e) => {
-  if (e.target.id === 'home-range') { ui.homeRange = e.target.value; render(); }
-  else if (e.target.id === 'econ-range') { ui.econRange = e.target.value; render(); }
-  else if (e.target.id === 'pop-year') { ui.popYear = Number(e.target.value); render(); }
-  else if (e.target.id === 'data-year') { ui.dataYear = Number(e.target.value); ui.csvStatus = ''; render(); }
-  else if (e.target.name === 'ind') {
-    const box = e.target;
-    if (box.checked && !ui.dataIndicators.includes(box.value)) ui.dataIndicators.push(box.value);
-    if (!box.checked) ui.dataIndicators = ui.dataIndicators.filter((k) => k !== box.value);
-    render();
-  }
-});
-
-app.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && e.target.matches('tr[data-prov]')) {
-    ui.selectedProv = e.target.getAttribute('data-prov');
-    render();
-  }
-});
-
-window.addEventListener('hashchange', render);
-render();
+window.addEventListener('hashchange', route);
+bindGlobal();
+bindPage();
+route();

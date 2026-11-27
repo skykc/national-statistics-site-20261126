@@ -1,162 +1,146 @@
-// DataNusa — grafik SVG murni. Tidak ada library, tidak ada canvas, tidak ada network.
-// Setiap fungsi mengembalikan string <svg> siap disisipkan ke halaman.
-
+// DataNusa — grafik SVG murni (tanpa library, tanpa network).
+// Perbaikan ronde 2: setiap grafik memberi ruang bawah yang lapang sehingga
+// titik terendah (mis. -2,07 pada 2020) dan label sumbu-x tidak pernah terpotong.
+const NS = 'http://www.w3.org/2000/svg';
 const BLUE = '#0b5fa5';
 const AMBER = '#e8a838';
 const GREEN = '#2e9e6b';
-const ORANGE = '#d97b29';
-const GREY = '#8a97a5';
+const ORANGE = '#d96c1e';
+const GREY = '#8a94a6';
 
-function esc(s) {
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+export function fmtID(n, dec = 2) {
+  return n.toLocaleString('id-ID', { minimumFractionDigits: dec, maximumFractionDigits: dec });
 }
 
-// Format angka gaya Indonesia: koma desimal, titik ribuan.
-export function fmt(n, digits = 2) {
-  if (n === null || n === undefined || Number.isNaN(n)) return '—';
-  const parts = Number(n).toFixed(digits).split('.');
-  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  return parts.join(',');
+function svgEl(tag, attrs, text) {
+  const el = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  if (text !== undefined) el.textContent = text;
+  return el;
 }
 
-// Grafik garis: values sejajar dengan labels (tahun). Null dilewati (garis terputus).
-export function lineChart(values, labels, opts = {}) {
-  const w = opts.width || 760;
-  const h = opts.height || 300;
-  const color = opts.color || BLUE;
-  const padL = 56, padR = 16, padT = 18, padB = 30;
-  const pts = values.map((v, i) => ({ v, label: labels[i] })).filter((p) => p.v !== null && p.v !== undefined);
-  const nums = pts.map((p) => p.v);
-  let min = Math.min(...nums);
-  let max = Math.max(...nums);
-  if (min === max) { min -= 1; max += 1; }
+function niceTicks(min, max, count = 4) {
   const span = max - min || 1;
-  min -= span * 0.08;
-  max += span * 0.08;
-  const x = (i) => padL + (i * (w - padL - padR)) / (labels.length - 1);
-  const y = (v) => padT + ((max - v) / (max - min)) * (h - padT - padB);
-  const grid = [0, 0.25, 0.5, 0.75, 1].map((f) => {
-    const gv = max - f * (max - min);
-    const gy = padT + f * (h - padT - padB);
-    return `<line x1="${padL}" y1="${gy.toFixed(1)}" x2="${w - padR}" y2="${gy.toFixed(1)}" stroke="#e3e8ef" stroke-width="1"/>` +
-      `<text x="${padL - 8}" y="${(gy + 4).toFixed(1)}" text-anchor="end" font-size="11" fill="#5b6b7c">${esc(fmt(gv, 1))}</text>`;
-  }).join('');
-  let path = '';
-  let last = null;
-  for (let i = 0; i < values.length; i++) {
-    if (values[i] === null || values[i] === undefined) { last = null; continue; }
-    if (last === null) path += `M ${x(i).toFixed(1)} ${y(values[i]).toFixed(1)}`;
-    else path += ` L ${x(i).toFixed(1)} ${y(values[i]).toFixed(1)}`;
-    last = i;
+  const step = span / count;
+  const mag = 10 ** Math.floor(Math.log10(step));
+  const norm = step / mag;
+  const nice = norm < 1.5 ? 1 : norm < 3.5 ? 2 : norm < 7.5 ? 5 : 10;
+  const s = nice * mag;
+  const start = Math.floor(min / s) * s;
+  const out = [];
+  for (let v = start; v <= max + 1e-9; v += s) out.push(v);
+  return out;
+}
+
+// Grafik garis dengan area fill. Domain-y dipadatkan di bawah nilai minimum
+// (ruang 25% rentang) + padding bawah 34px untuk label tahun — jurang 2020
+// selalu terlihat penuh, tidak terpotong di tepi bawah.
+export function lineChart(years, values, opts = {}) {
+  const W = opts.width || 760, H = opts.height || 250;
+  const padL = 52, padR = 14, padT = 26, padB = 34;
+  const pts = years.map((y, i) => ({ y, v: values[i] })).filter((p) => p.v !== null && p.v !== undefined);
+  const vs = pts.map((p) => p.v);
+  let lo = Math.min(...vs), hi = Math.max(...vs);
+  const span = (hi - lo) || 1;
+  lo -= span * 0.25; hi += span * 0.18;
+  const X = (i) => padL + (i * (W - padL - padR)) / (years.length - 1);
+  const Y = (v) => padT + ((hi - v) / (hi - lo)) * (H - padT - padB);
+  const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, width: '100%', role: 'img', 'aria-label': opts.label || 'Grafik garis' });
+  for (const t of niceTicks(lo, hi)) {
+    const y = Y(t);
+    svg.appendChild(svgEl('line', { x1: padL, x2: W - padR, y1: y, y2: y, stroke: '#e3e8ef', 'stroke-width': 1 }));
+    svg.appendChild(svgEl('text', { x: padL - 8, y: y + 4, 'text-anchor': 'end', 'font-size': 11, fill: GREY }, fmtID(t, t % 1 ? 1 : 0)));
   }
-  const dots = pts.map((p) => {
-    const i = labels.indexOf(p.label);
-    return `<circle cx="${x(i).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="3.5" fill="${color}" stroke="#fff" stroke-width="1.5"/>`;
-  }).join('');
-  // Isian area tipis di bawah garis + label titik terendah (mis. kontraksi 2020).
-  const firstIdx = values.findIndex((v) => v !== null && v !== undefined);
-  let lastIdx = values.length - 1;
-  while (lastIdx > 0 && (values[lastIdx] === null || values[lastIdx] === undefined)) lastIdx--;
-  const baseY = y(min).toFixed(1);
-  const area = `<path d="${path} L ${x(lastIdx).toFixed(1)} ${baseY} L ${x(firstIdx).toFixed(1)} ${baseY} Z" fill="${color}" opacity="0.08"/>`;
-  const minPt = pts.reduce((a, b) => (b.v < a.v ? b : a), pts[0]);
-  const minI = labels.indexOf(minPt.label);
-  const minTag = minPt.v < 0
-    ? `<text x="${x(minI).toFixed(1)}" y="${(y(minPt.v) + 18).toFixed(1)}" text-anchor="middle" font-size="12" font-weight="700" fill="${color}">${esc(fmt(minPt.v, 2))}</text>`
-    : '';
-  const xlabels = labels.map((lab, i) => `<text x="${x(i).toFixed(1)}" y="${h - 8}" text-anchor="middle" font-size="11" fill="#5b6b7c">${esc(lab)}</text>`).join('');
-  const lastVal = pts[pts.length - 1];
-  const lastI = labels.indexOf(lastVal.label);
-  const valTag = `<text x="${x(lastI).toFixed(1)}" y="${(y(lastVal.v) - 10).toFixed(1)}" text-anchor="middle" font-size="12" font-weight="700" fill="${color}">${esc(fmt(lastVal.v, 2))}</text>`;
-  return `<svg viewBox="0 0 ${w} ${h}" width="100%" role="img" aria-label="Grafik garis">${grid}${area}<path d="${path}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>${dots}${minTag}${valTag}${xlabels}</svg>`;
+  if (lo < 0 && hi > 0) {
+    svg.appendChild(svgEl('line', { x1: padL, x2: W - padR, y1: Y(0), y2: Y(0), stroke: '#c8cfdb', 'stroke-width': 1, 'stroke-dasharray': '4 3' }));
+  }
+  const linePts = pts.map((p) => `${X(years.indexOf(p.y))},${Y(p.v)}`).join(' ');
+  const area = `${padL},${Y(lo)} ${linePts} ${X(years.indexOf(pts[pts.length - 1].y))},${Y(lo)}`;
+  svg.appendChild(svgEl('polygon', { points: area, fill: BLUE, opacity: 0.08 }));
+  svg.appendChild(svgEl('polyline', { points: linePts, fill: 'none', stroke: opts.color || BLUE, 'stroke-width': 2.5, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
+  for (const p of pts) {
+    const cx = X(years.indexOf(p.y)), cy = Y(p.v);
+    svg.appendChild(svgEl('circle', { cx, cy, r: 3.5, fill: '#fff', stroke: opts.color || BLUE, 'stroke-width': 2 }));
+  }
+  const minP = pts.reduce((a, b) => (a.v <= b.v ? a : b));
+  const maxP = pts.reduce((a, b) => (a.v >= b.v ? a : b));
+  const minX = X(years.indexOf(minP.y));
+  // Label titik terendah diletakkan DI ATAS titiknya (bukan di bawah): bila
+  // titik berada di dekat tepi bawah grafik, label tetap terlihat penuh.
+  svg.appendChild(svgEl('text', { x: minX, y: Y(minP.v) - 10, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 700, fill: ORANGE }, fmtID(minP.v)));
+  svg.appendChild(svgEl('text', { x: X(years.indexOf(maxP.y)), y: Y(maxP.v) - 10, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 700, fill: GREEN }, fmtID(maxP.v)));
+  for (let i = 0; i < years.length; i += 2) {
+    svg.appendChild(svgEl('text', { x: X(i), y: H - 10, 'text-anchor': 'middle', 'font-size': 11, fill: GREY }, String(years[i])));
+  }
+  return svg;
 }
 
-// Grafik batang vertikal. Batang negatif memakai warna oranye dan labelnya putih DI DALAM batang.
-export function barChart(values, labels, opts = {}) {
-  const w = opts.width || 760;
-  const h = opts.height || 300;
-  const color = opts.color || BLUE;
-  const negColor = opts.negColor || ORANGE;
-  const padL = 56, padR = 16, padT = 24, padB = 30;
-  const nums = values.filter((v) => v !== null && v !== undefined);
-  let min = Math.min(0, ...nums);
-  let max = Math.max(0, ...nums);
-  if (min === max) { max = min + 1; }
-  const span = max - min || 1;
-  min -= span * 0.06;
-  max += span * 0.06;
-  const innerW = w - padL - padR;
-  const innerH = h - padT - padB;
-  const y = (v) => padT + ((max - v) / (max - min)) * innerH;
-  const y0 = y(0);
-  const slot = innerW / labels.length;
-  const bw = Math.min(44, slot * 0.62);
-  const grid = [0, 0.5, 1].map((f) => {
-    const gv = max - f * (max - min);
-    const gy = padT + f * innerH;
-    return `<line x1="${padL}" y1="${gy.toFixed(1)}" x2="${w - padR}" y2="${gy.toFixed(1)}" stroke="#e3e8ef" stroke-width="1"/>` +
-      `<text x="${padL - 8}" y="${(gy + 4).toFixed(1)}" text-anchor="end" font-size="11" fill="#5b6b7c">${esc(fmt(gv, 1))}</text>`;
-  }).join('');
-  const zeroLine = `<line x1="${padL}" y1="${y0.toFixed(1)}" x2="${w - padR}" y2="${y0.toFixed(1)}" stroke="#9aa7b5" stroke-width="1.5"/>`;
-  const bars = values.map((v, i) => {
-    if (v === null || v === undefined) return '';
-    const cx = padL + i * slot + slot / 2;
-    const top = Math.min(y(v), y0);
-    const height = Math.abs(y(v) - y0);
-    const fill = v < 0 ? negColor : color;
-    const labelY = v < 0 ? y0 + 16 : y(v) - 8;
-    const labelFill = v < 0 ? '#ffffff' : '#0b2a4a';
-    const labelAnchor = 'middle';
-    return `<rect x="${(cx - bw / 2).toFixed(1)}" y="${top.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(height, 1).toFixed(1)}" rx="3" fill="${fill}"/>` +
-      `<text x="${cx.toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="${labelAnchor}" font-size="12" font-weight="700" fill="${labelFill}">${esc(fmt(v, 2))}</text>` +
-      `<text x="${cx.toFixed(1)}" y="${h - 8}" text-anchor="middle" font-size="11" fill="#5b6b7c">${esc(labels[i])}</text>`;
-  }).join('');
-  return `<svg viewBox="0 0 ${w} ${h}" width="100%" role="img" aria-label="Grafik batang">${grid}${zeroLine}${bars}</svg>`;
+// Grafik batang vertikal. Label batang negatif ditulis PUTIH DI DALAM batang
+// (bukan di bawah sumbu) sehingga tidak pernah terpotong.
+export function barChart(labels, values, opts = {}) {
+  const W = opts.width || 760, H = opts.height || 260;
+  const padL = 52, padR = 10, padT = 26, padB = 34;
+  const lo = Math.min(0, ...values) * 1.15, hi = Math.max(...values) * 1.12;
+  const X = (i) => padL + (i * (W - padL - padR)) / values.length;
+  const bw = ((W - padL - padR) / values.length) * 0.62;
+  const Y = (v) => padT + ((hi - v) / (hi - lo)) * (H - padT - padB);
+  const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, width: '100%', role: 'img', 'aria-label': opts.label || 'Grafik batang' });
+  for (const t of niceTicks(lo, hi)) {
+    const y = Y(t);
+    svg.appendChild(svgEl('line', { x1: padL, x2: W - padR, y1: y, y2: y, stroke: '#e3e8ef', 'stroke-width': 1 }));
+    svg.appendChild(svgEl('text', { x: padL - 8, y: y + 4, 'text-anchor': 'end', 'font-size': 11, fill: GREY }, fmtID(t, 0)));
+  }
+  svg.appendChild(svgEl('line', { x1: padL, x2: W - padR, y1: Y(0), y2: Y(0), stroke: '#c8cfdb', 'stroke-width': 1 }));
+  values.forEach((v, i) => {
+    const x = X(i) + (((W - padL - padR) / values.length) - bw) / 2;
+    const yTop = Y(Math.max(v, 0)), yBot = Y(Math.min(v, 0));
+    const color = v < 0 ? ORANGE : (opts.color || BLUE);
+    svg.appendChild(svgEl('rect', { x, y: yTop, width: bw, height: Math.max(1, yBot - yTop), rx: 3, fill: color }));
+    if (v < 0) {
+      svg.appendChild(svgEl('text', { x: x + bw / 2, y: yBot - 7, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 700, fill: '#fff' }, fmtID(v)));
+    } else {
+      svg.appendChild(svgEl('text', { x: x + bw / 2, y: yTop - 7, 'text-anchor': 'middle', 'font-size': 11, 'font-weight': 700, fill: '#33415c' }, fmtID(v, v % 1 ? 2 : 0)));
+    }
+    svg.appendChild(svgEl('text', { x: x + bw / 2, y: H - 10, 'text-anchor': 'middle', 'font-size': 11, fill: GREY }, String(labels[i])));
+  });
+  return svg;
 }
 
-// Grafik batang horizontal (untuk perbandingan, mis. ASEAN).
+// Grafik batang horizontal (untuk perbandingan antarnegara / provinsi).
 export function hbarChart(items, opts = {}) {
-  const rowH = opts.rowHeight || 44;
-  const w = opts.width || 760;
-  const h = rowH * items.length + 16;
-  const color = opts.color || BLUE;
-  const highlight = opts.highlight || null;
+  const W = opts.width || 760, rowH = 34, padL = 150, padR = 90, padT = 10, padB = 8;
+  const H = padT + padB + items.length * rowH;
   const max = Math.max(...items.map((d) => d.value));
-  const labelW = 110;
-  const rows = items.map((d, i) => {
-    const y = 8 + i * rowH;
-    const bw = ((w - labelW - 90) * d.value) / max;
-    const fill = d.label === highlight ? AMBER : color;
-    return `<text x="0" y="${y + 22}" font-size="12" font-weight="600" fill="#0b2a4a">${esc(d.label)}</text>` +
-      `<rect x="${labelW}" y="${y + 6}" width="${Math.max(bw, 2).toFixed(1)}" height="20" rx="4" fill="${fill}"/>` +
-      `<text x="${(labelW + bw + 8).toFixed(1)}" y="${y + 22}" font-size="12" font-weight="700" fill="#0b2a4a">${esc(fmt(d.value, 0))}</text>`;
-  }).join('');
-  return `<svg viewBox="0 0 ${w} ${h}" width="100%" role="img" aria-label="Grafik batang horizontal">${rows}</svg>`;
+  const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, width: '100%', role: 'img', 'aria-label': opts.label || 'Grafik batang horizontal' });
+  items.forEach((d, i) => {
+    const y = padT + i * rowH;
+    const w = ((W - padL - padR) * d.value) / max;
+    svg.appendChild(svgEl('text', { x: padL - 10, y: y + 17, 'text-anchor': 'end', 'font-size': 12, fill: '#33415c' }, d.name));
+    svg.appendChild(svgEl('rect', { x: padL, y: y + 4, width: Math.max(2, w), height: 20, rx: 3, fill: d.highlight ? AMBER : BLUE }));
+    svg.appendChild(svgEl('text', { x: padL + Math.max(2, w) + 8, y: y + 19, 'font-size': 12, 'font-weight': 700, fill: '#33415c' }, opts.format ? opts.format(d.value) : fmtID(d.value)));
+  });
+  return svg;
 }
 
-// Donat: items {label, value}; legenda di samping.
+// Donat pangsa dengan legenda.
 export function donutChart(items, opts = {}) {
-  const size = opts.size || 220;
-  const colors = opts.colors || [BLUE, AMBER, GREEN, ORANGE, '#7a5fb5', '#c25e7a', '#3d8fa8', '#8a97a5', '#5b6b7c'];
-  const total = items.reduce((s, d) => s + d.value, 0);
-  const cx = size / 2, cy = size / 2, r = size / 2 - 14, ir = r * 0.58;
+  const S = opts.size || 240, cx = S / 2, cy = S / 2, r = S / 2 - 14, ir = r * 0.58;
+  const total = items.reduce((a, d) => a + d.value, 0);
+  const colors = [BLUE, AMBER, GREEN, '#7c5cbf', ORANGE, '#2a9d8f', '#e76f51', '#6c757d', '#b08968'];
+  const svg = svgEl('svg', { viewBox: `0 0 ${S} ${S}`, width: S, height: S, role: 'img', 'aria-label': opts.label || 'Donat pangsa' });
   let a0 = -Math.PI / 2;
-  const segs = items.map((d, i) => {
-    const frac = d.value / total;
-    const a1 = a0 + frac * Math.PI * 2;
-    const large = frac > 0.5 ? 1 : 0;
+  items.forEach((d, i) => {
+    const a1 = a0 + (d.value / total) * Math.PI * 2;
+    const large = (a1 - a0) > Math.PI ? 1 : 0;
     const x0 = cx + r * Math.cos(a0), y0 = cy + r * Math.sin(a0);
     const x1 = cx + r * Math.cos(a1), y1 = cy + r * Math.sin(a1);
-    const xi1 = cx + ir * Math.cos(a1), yi1 = cy + ir * Math.sin(a1);
-    const xi0 = cx + ir * Math.cos(a0), yi0 = cy + ir * Math.sin(a0);
-    const dAttr = `M ${x0.toFixed(1)} ${y0.toFixed(1)} A ${r} ${r} 0 ${large} 1 ${x1.toFixed(1)} ${y1.toFixed(1)} L ${xi1.toFixed(1)} ${yi1.toFixed(1)} A ${ir} ${ir} 0 ${large} 0 ${xi0.toFixed(1)} ${yi0.toFixed(1)} Z`;
+    const x2 = cx + ir * Math.cos(a1), y2 = cy + ir * Math.sin(a1);
+    const x3 = cx + ir * Math.cos(a0), y3 = cy + ir * Math.sin(a0);
+    svg.appendChild(svgEl('path', { d: `M ${x0} ${y0} A ${r} ${r} 0 ${large} 1 ${x1} ${y1} L ${x2} ${y2} A ${ir} ${ir} 0 ${large} 0 ${x3} ${y3} Z`, fill: colors[i % colors.length] }));
     a0 = a1;
-    return `<path d="${dAttr}" fill="${colors[i % colors.length]}"/>`;
-  }).join('');
-  const center = `<text x="${cx}" y="${cy - 2}" text-anchor="middle" font-size="22" font-weight="800" fill="#0b2a4a">100%</text>` +
-    `<text x="${cx}" y="${cy + 18}" text-anchor="middle" font-size="11" fill="#5b6b7c">total pangsa</text>`;
-  const legend = items.map((d, i) =>
-    `<span class="legend-item"><span class="legend-dot" style="background:${colors[i % colors.length]}"></span>${esc(d.label)} — <strong>${esc(fmt(d.value, 1))}%</strong></span>`
-  ).join('');
-  return `<div class="donut-wrap"><svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" role="img" aria-label="Grafik donat">${segs}${center}</svg><div class="legend">${legend}</div></div>`;
+  });
+  const mid = svgEl('text', { x: cx, y: cy - 4, 'text-anchor': 'middle', 'font-size': 22, 'font-weight': 800, fill: '#0b2a4a' }, opts.center || '');
+  svg.appendChild(mid);
+  svg.appendChild(svgEl('text', { x: cx, y: cy + 16, 'text-anchor': 'middle', 'font-size': 11, fill: GREY }, opts.centerSub || ''));
+  return svg;
 }

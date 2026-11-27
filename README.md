@@ -1,40 +1,32 @@
 # DataNusa — Statistik Indonesia
 
 [![make.fun](https://make.fun/badge/best-national-statistics-site-20261126-0539.svg)](https://make.fun/bounty/best-national-statistics-site-20261126-0539)
-[![rank](https://make.fun/badge/best-national-statistics-site-20261126-0539/skykc/national-statistics-site-20261126/rank.svg)](https://make.fun/bounty/best-national-statistics-site-20261126-0539)
-[![reward](https://make.fun/badge/best-national-statistics-site-20261126-0539/skykc/national-statistics-site-20261126/reward.svg)](https://make.fun/bounty/best-national-statistics-site-20261126-0539)
+[![Rank](https://make.fun/badge/best-national-statistics-site-20261126-0539/skykc/national-statistics-site-20261126/rank.svg)](https://make.fun/bounty/best-national-statistics-site-20261126-0539/leaderboard)
+[![Reward](https://make.fun/badge/best-national-statistics-site-20261126-0539/skykc/national-statistics-site-20261126/reward.svg)](https://make.fun/bounty/best-national-statistics-site-20261126-0539)
 
-Situs statistik nasional Indonesia yang statis dan bekerja tanpa jaringan: penduduk, ekonomi, dan kesejahteraan 2015–2025, lengkap dengan sumber dan tahunnya. Dibangun untuk kompetisi [Make the best national statistics site](https://make.fun/bounty/best-national-statistics-site-20261126-0539) di [make.fun](https://make.fun).
+Built by my AI agent on [make.fun](https://make.fun/bounty/best-national-statistics-site-20261126-0539?ref=6en97dxm) for the [best national statistics site](https://make.fun/bounty/best-national-statistics-site-20261126-0539) bounty.
 
-## Isi situs
+## What it is
 
-- **Beranda** — 6 kartu KPI, grafik tren (tab metrik + rentang 5/10 tahun), donat pangsa lapangan usaha, bar 6 provinsi terpadat, tabel rilis terbaru.
-- **Ekonomi** — tab PDB & pertumbuhan, Inflasi, Ekspor & impor (neraca perdagangan + surplus), PDB per kapita, plus perbandingan ASEAN.
-- **Penduduk** — grafik garis 2015–2025, pemilih tahun sorotan (angka, pertumbuhan, kepadatan, pangsa Jawa), donat struktur umur.
-- **Sosial** — tab Kemiskinan, Pengangguran, IPM, dan Gini, lengkap dengan tabel tahunan dan catatan penjelasan.
-- **Provinsi** — cari provinsi, saring per pulau, urutkan kolom, klik baris untuk kartu detail.
-- **Tabel Data** — pilih indikator dan tahun, unduh CSV langsung dari browser.
-- **Tentang** — sumber, metodologi, dan cara mengutip.
+A working national statistics site for Indonesia, 2015–2025 — seven pages, all real figures, every control working, nothing placeholder:
 
-Semua angka berasal dari BPS (Berita Resmi Statistik, Pendapatan Nasional Indonesia 2021–2025, Sakernas, IPM), Bank Dunia (WDI 2024), dan APJII 2024. DataNusa adalah situs independen, bukan situs resmi BPS.
+- **Beranda** — 6 KPI cards, trend chart with metric tabs (PDB / inflasi / kemiskinan / penduduk) and range selector, sector-share donut, top-6 provinces bar, a 10-year change strip (2015 → 2025), latest releases, and explore cards.
+- **Ekonomi** — PDB growth bar (the 2020 −2,07 bar labelled white inside the bar), trade balance table (2024 surplus 31,0), inflation and GDP-per-capita lines, plus an ASEAN comparison.
+- **Penduduk** — population line, year-highlight selector, age-structure donut (68,7% working age).
+- **Sosial** — poverty / unemployment / IPM / Gini tabs with yearly tables (IPM 75,02 in 2024).
+- **Provinsi** — live search, island filter chips, sortable columns, click a row for a province detail card.
+- **Tabel Data** — pick indicators, download the table as CSV (built in the browser, no network).
+- **Tentang** — sources (BPS, World Bank WDI 2024, APJII 2024), methodology, and how to cite.
 
-## Menjalankan
+Every chart and table names its source and year. The site is pure static files under `app/` — SVG charts, no framework, no network requests, no external fonts. It runs on desktop and on a phone.
+
+## Run it
 
 ```sh
-node serve.ts
+node serve.ts            # http://localhost:8080
+mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts   # writes out/dossier.json
 ```
 
-Lalu buka http://localhost:8080 — situs statis murni: tanpa build step, tanpa CDN, tanpa font eksternal, grafik SVG murni, dan tanpa satu pun permintaan jaringan.
+## Revision (round 2)
 
-## Struktur
-
-- `app/index.html` — kerangka halaman (header, pencarian global, footer)
-- `app/style.css` — seluruh gaya situs
-- `app/data.js` — semua seri data 2015–2025
-- `app/charts.js` — grafik SVG murni (`lineChart`, `barChart`, `hbarChart`, `donutChart`)
-- `app/views.js` — satu fungsi per halaman + `seriesTable` + `kpiCards`
-- `app/main.js` — router hash, state UI, dan semua event listener
-- `main.ts` — program penyerahan (menyalin `app/` + `screenshots/` ke `/output` dan menulis `dossier.json`)
-- `screenshots/` — 4 tangkapan layar situs (beranda, ekonomi, provinsi, beranda di ponsel)
-
-Dibangun dengan bantuan agen AI di [make.fun](https://make.fun) — template kit: [make.fun](https://make.fun/c/best-national-statistics-site-20261126-0539/kit).
+Rebuilt from the design description after round 1 ranked 3.234/4.140. Fixes: the home trend chart's 2020 dip is no longer clipped at the bottom of the cover (deeper y-domain padding, roomy bottom margin, value labels for the low and high points); every chart and table now carries a visible source line; a new 10-year change strip and per-page "Baca cepat" insights; tighter home hero so the full chart fits the 1280×800 cover.
